@@ -1,759 +1,317 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as plotly_go
+from plotly.subplots import make_subplots
 import time
 import json
-import random
+import os
 from datetime import datetime
+from ml_engine import EdgeGuardMLEngine
+from preprocessing import perform_fft
 
-import numpy as np
-import pandas as pd
-import streamlit as st
-import plotly.graph_objects as go
-from streamlit_autorefresh import st_autorefresh
+# Initialize ML Engine
+ml_engine = EdgeGuardMLEngine()
 
-from config import TELEMETRY_FILE
-from preprocessing import calculate_health_index
-from ml_engine import predict
+# Page Config
+st.set_page_config(page_title="EdgeGuard Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-
-# ============================================================
-# PAGE
-# ============================================================
-
-st.set_page_config(
-    page_title="EdgeGuard | Predictive Maintenance",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-
-# ============================================================
-# CSS
-# ============================================================
-
+# Custom CSS for Industrial NOC look with Enhanced Colorful Sidebar
 st.markdown("""
 <style>
+    /* Main Background & Text */
+    .stApp {
+        background-color: #0b0f19;
+        color: #e2e8f0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    /* --- ENHANCED SIDEBAR --- */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%);
+        border-right: 2px solid #38bdf8;
+        box-shadow: 5px 0 20px rgba(56, 189, 248, 0.15);
+    }
+    
+    /* Sidebar Headers */
+    [data-testid="stSidebar"] h3 {
+        color: #38bdf8 !important;
+        font-weight: 800 !important;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        border-bottom: 2px solid #38bdf8;
+        padding-bottom: 5px;
+        margin-top: 25px;
+        text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+    }
 
-.stApp {
-    background:
-        radial-gradient(circle at 80% 10%, rgba(0, 180, 255, 0.10), transparent 25%),
-        radial-gradient(circle at 20% 80%, rgba(120, 50, 255, 0.10), transparent 30%),
-        #050914;
-    color: #e8f3ff;
-}
-
-[data-testid="stSidebar"] {
-    background: linear-gradient(
-        180deg,
-        #071226 0%,
-        #050914 100%
-    );
-    border-right: 1px solid #12365c;
-}
-
-[data-testid="stMetric"] {
-    background: linear-gradient(
-        135deg,
-        rgba(10, 27, 52, 0.95),
-        rgba(7, 16, 32, 0.95)
-    );
-    border: 1px solid #174c79;
-    padding: 18px;
-    border-radius: 15px;
-}
-
-[data-testid="stMetricValue"] {
-    color: #e9f7ff;
-}
-
-h1 {
-    color: #eaf8ff;
-}
-
-h2, h3 {
-    color: #bde9ff;
-}
-
-.demo-box {
-    padding: 15px;
-    border-radius: 15px;
-    border: 1px solid #174c79;
-    background: linear-gradient(
-        135deg,
-        rgba(8, 30, 58, 0.95),
-        rgba(22, 10, 55, 0.95)
-    );
-}
-
-.normal {
-    color: #00e676;
-    font-weight: bold;
-}
-
-.warning {
-    color: #ffd54f;
-    font-weight: bold;
-}
-
-.fault {
-    color: #ff5252;
-    font-weight: bold;
-}
-
-.live {
-    color: #00e5ff;
-    font-weight: bold;
-}
-
+    /* Sidebar Radio & Selectbox glowing borders */
+    [data-testid="stSidebar"] .stSelectbox > div > div {
+        background-color: rgba(30, 41, 59, 0.7);
+        border: 1px solid #8b5cf6;
+        color: white;
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+    }
+    
+    /* Sidebar Button Styling */
+    [data-testid="stSidebar"] .stButton > button {
+        width: 100%;
+        font-weight: bold;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(30, 41, 59, 0.5);
+        transition: all 0.3s ease;
+    }
+    
+    /* Hover effects for buttons (Color coded by position) */
+    [data-testid="stSidebar"] .element-container:nth-of-type(4) button:hover {
+        background-color: rgba(16, 185, 129, 0.2);
+        border-color: #10b981;
+        color: #10b981;
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    }
+    
+    [data-testid="stSidebar"] .element-container:nth-of-type(5) button:hover {
+        background-color: rgba(245, 158, 11, 0.2);
+        border-color: #f59e0b;
+        color: #f59e0b;
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+    }
+    
+    [data-testid="stSidebar"] .element-container:nth-of-type(6) button:hover {
+        background-color: rgba(239, 68, 68, 0.2);
+        border-color: #ef4444;
+        color: #ef4444;
+        box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    }
+    
+    /* --- MAIN DASHBOARD CARDS --- */
+    div.css-1r6slb0, div.css-12w0qpk {
+        background-color: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        font-size: 28px !important;
+        font-weight: 700 !important;
+        color: #f8fafc !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #94a3b8 !important;
+        font-size: 14px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    h1, h2 { color: #f1f5f9 !important; font-weight: 600 !important; }
+    
+    /* Status Badges */
+    .status-normal { background-color: rgba(16, 185, 129, 0.2); color: #10b981; padding: 4px 12px; border-radius: 12px; font-weight: bold; border: 1px solid #10b981; }
+    .status-warning { background-color: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 4px 12px; border-radius: 12px; font-weight: bold; border: 1px solid #f59e0b; }
+    .status-fault { background-color: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 4px 12px; border-radius: 12px; font-weight: bold; border: 1px solid #ef4444; }
+    
+    hr { border-color: #374151; }
 </style>
 """, unsafe_allow_html=True)
 
+# State Management
+if 'events' not in st.session_state:
+    st.session_state.events = []
+if 'history' not in st.session_state:
+    st.session_state.history = pd.DataFrame(columns=['Time', 'Temp', 'Current', 'Vibration', 'Status'])
 
-# ============================================================
-# SESSION STATE
-# ============================================================
+def add_event(message, level):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    st.session_state.events.insert(0, {"Time": timestamp, "Event": message, "Status": level})
+    if len(st.session_state.events) > 15:
+        st.session_state.events.pop()
 
-if "mode" not in st.session_state:
-    st.session_state.mode = "DEMO"
+def send_hardware_command(command):
+    cmd_file = "data/command.txt"
+    os.makedirs(os.path.dirname(cmd_file), exist_ok=True)
+    with open(cmd_file, "w") as f:
+        f.write(command)
+    add_event(f"Hardware command sent: {command}", "INFO")
 
-if "scenario" not in st.session_state:
-    st.session_state.scenario = "NORMAL"
-
-if "demo_temperature" not in st.session_state:
-    st.session_state.demo_temperature = 42.0
-
-if "demo_current" not in st.session_state:
-    st.session_state.demo_current = 0.9
-
-if "demo_vibration" not in st.session_state:
-    st.session_state.demo_vibration = 0.20
-
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-if "alerts" not in st.session_state:
-    st.session_state.alerts = []
-
-
-# ============================================================
-# FUNCTIONS
-# ============================================================
-
-def generate_demo_values(scenario):
-
+def generate_demo_waveform(scenario, samples=128):
+    t = np.linspace(0, 1, samples)
     if scenario == "NORMAL":
-
-        temperature = random.uniform(36, 45)
-        current = random.uniform(0.65, 1.05)
-        vibration = random.uniform(0.08, 0.22)
-
+        wave = 0.1 * np.sin(2 * np.pi * 15 * t) + np.random.normal(0, 0.02, samples)
+        return wave.tolist(), 41.2 + np.random.normal(0, 0.5), 0.85 + np.random.normal(0, 0.02)
     elif scenario == "WARNING":
+        wave = 0.4 * np.sin(2 * np.pi * 15 * t) + 0.2 * np.sin(2 * np.pi * 45 * t) + np.random.normal(0, 0.1, samples)
+        return wave.tolist(), 64.0 + np.random.normal(0, 1.5), 1.85 + np.random.normal(0, 0.1)
+    else: # FAULT
+        wave = 1.0 * np.sin(2 * np.pi * 15 * t) + 0.8 * np.sin(2 * np.pi * 85 * t) + np.random.normal(0, 0.3, samples)
+        # Add random spikes
+        spike_indices = np.random.choice(samples, 5)
+        wave[spike_indices] += np.random.uniform(1.5, 2.5, 5)
+        return wave.tolist(), 91.0 + np.random.normal(0, 2.0), 3.10 + np.random.normal(0, 0.2)
 
-        temperature = random.uniform(55, 68)
-        current = random.uniform(1.5, 2.2)
-        vibration = random.uniform(0.35, 0.65)
-
-    elif scenario == "FAULT":
-
-        temperature = random.uniform(78, 90)
-        current = random.uniform(2.7, 3.8)
-        vibration = random.uniform(0.80, 1.30)
-
-    elif scenario == "OVERHEATING":
-
-        temperature = random.uniform(78, 95)
-        current = random.uniform(1.5, 2.5)
-        vibration = random.uniform(0.20, 0.50)
-
-    elif scenario == "HIGH VIBRATION":
-
-        temperature = random.uniform(45, 60)
-        current = random.uniform(0.9, 1.7)
-        vibration = random.uniform(0.75, 1.40)
-
-    else:
-
-        temperature = st.session_state.demo_temperature
-        current = st.session_state.demo_current
-        vibration = st.session_state.demo_vibration
-
-    return {
-        "temperature": round(temperature, 2),
-        "current": round(current, 2),
-        "vibration_rms": round(vibration, 3),
-        "motor_state": 1,
-        "source": "SIMULATION"
-    }
-
-
-def read_hardware():
-
-    try:
-
-        if not TELEMETRY_FILE.exists():
-            return None
-
-        with open(
-            TELEMETRY_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            lines = f.readlines()
-
-        if not lines:
-            return None
-
-        return json.loads(lines[-1])
-
-    except Exception:
+def read_live_telemetry():
+    filepath = "data/telemetry.jsonl"
+    if not os.path.exists(filepath):
         return None
+    try:
+        with open(filepath, 'r') as f:
+            lines = f.readlines()
+            if lines:
+                return json.loads(lines[-1])
+    except Exception:
+        pass
+    return None
 
-
-def get_data():
-
-    if st.session_state.mode == "DEMO":
-
-        data = generate_demo_values(
-            st.session_state.scenario
-        )
-
-    else:
-
-        data = read_hardware()
-
-        if data is None:
-            return {
-                "temperature": 0,
-                "current": 0,
-                "vibration_rms": 0,
-                "motor_state": 0,
-                "source": "WAITING"
-            }
-
-    return data
-
-
-def add_history(data, result):
-
-    point = {
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "temperature": data["temperature"],
-        "current": data["current"],
-        "vibration": data["vibration_rms"],
-        "health": result["health_score"],
-        "status": result["health_status"]
-    }
-
-    st.session_state.history.append(point)
-
-    if len(st.session_state.history) > 60:
-        st.session_state.history.pop(0)
-
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.markdown(
-        "# 🛡️ EdgeGuard"
-    )
-
-    st.caption(
-        "Predictive Maintenance & Fault Detection"
-    )
-
-    st.divider()
-
-    st.markdown("### Operating Mode")
-
-    mode = st.radio(
-        "Data source",
-        [
-            "DEMO",
-            "HARDWARE LIVE"
-        ],
-        index=0 if st.session_state.mode == "DEMO" else 1
-    )
-
-    st.session_state.mode = mode
-
-    st.divider()
-
-    if mode == "DEMO":
-
-        st.success("🟢 SIMULATION ACTIVE")
-
-        st.caption(
-            "No hardware connected. "
-            "Values are generated virtually."
-        )
-
-    else:
-
-        st.info("🔵 HARDWARE LIVE")
-
-        st.caption(
-            "Reading ESP32 telemetry through "
-            "the laptop data pipeline."
-        )
-
-    st.divider()
-
-    st.markdown("### System")
-
-    st.write("🟢 Dashboard Online")
-    st.write("🤖 SVM Engine Ready")
-    st.write("📡 Data Engine Ready")
-
-    st.divider()
-
-    st.caption(
-        "EdgeGuard • Predict Today • Prevent Tomorrow"
-    )
-
-
-# ============================================================
-# LIVE REFRESH
-# ============================================================
-
-st_autorefresh(
-    interval=2000,
-    key="edgeguard_refresh"
-)
-
-
-# ============================================================
-# GET DATA
-# ============================================================
-
-data = get_data()
-
-result = predict(data)
-
-add_history(data, result)
-
-temperature = data["temperature"]
-current = data["current"]
-vibration = data["vibration_rms"]
-
-status = result["health_status"]
-confidence = result["confidence"]
-health = result["health_score"]
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-col1, col2 = st.columns([4, 1])
-
+# --- HEADER ---
+col1, col2 = st.columns([3, 1])
 with col1:
-
-    st.markdown(
-        "# 🛡️ EdgeGuard Dashboard"
-    )
-
-    st.caption(
-        "Real-time Monitoring  •  AI Powered  •  Predictive Maintenance"
-    )
-
+    st.markdown("<h1>🛡️ EDGEGUARD <span style='font-size: 16px; color:#94a3b8; font-weight:normal;'>Autonomous Predictive Maintenance & Fault Detection</span></h1>", unsafe_allow_html=True)
 with col2:
-
-    if st.session_state.mode == "DEMO":
-
-        st.success(
-            "🟢 SIMULATION MODE\n\nNo Hardware"
-        )
-
+    mode_display = st.sidebar.radio("DATA SOURCE", ["🟢 DEMO / NO HARDWARE", "🔌 HARDWARE LIVE"])
+    is_live = "HARDWARE LIVE" in mode_display
+    
+    if is_live:
+        st.markdown(f"<div style='text-align:right; margin-top:15px;'><span class='status-normal'>● HARDWARE LIVE</span> <br> <span style='font-size:12px; color:#94a3b8;'>Protocol: UART / JSON | Latency: 12 ms</span></div>", unsafe_allow_html=True)
     else:
+        st.markdown(f"<div style='text-align:right; margin-top:15px;'><span class='status-warning'>● DEMO MODE</span> <br> <span style='font-size:12px; color:#94a3b8;'>Simulated Telemetry Pipeline</span></div>", unsafe_allow_html=True)
 
-        st.info(
-            "🔵 HARDWARE LIVE"
-        )
+st.markdown("<hr style='margin-top:0px; margin-bottom: 15px;'>", unsafe_allow_html=True)
 
+# --- SIDEBAR CONTROLS ---
+st.sidebar.markdown("### 🎛️ OPERATOR CONTROL")
+st.sidebar.markdown("<span style='color:#94a3b8; font-size: 13px;'>Select telemetry origin and simulation scenario.</span>", unsafe_allow_html=True)
+st.sidebar.write("") # Spacer
 
-# ============================================================
-# TOP METRICS
-# ============================================================
-
-m1, m2, m3, m4, m5 = st.columns(5)
-
-with m1:
-    st.metric(
-        "🌡️ Temperature",
-        f"{temperature:.1f} °C"
-    )
-
-with m2:
-    st.metric(
-        "⚡ Current",
-        f"{current:.2f} A"
-    )
-
-with m3:
-    st.metric(
-        "〽️ Vibration RMS",
-        f"{vibration:.2f} g"
-    )
-
-with m4:
-
-    motor = "RUNNING" if data.get("motor_state", 1) else "STOPPED"
-
-    st.metric(
-        "⚙️ Motor",
-        motor
-    )
-
-with m5:
-
-    st.metric(
-        "❤️ Health",
-        f"{health:.0f}/100",
-        status
-    )
-
-
-st.write("")
-
-
-# ============================================================
-# DEMO CONTROL PANEL
-# ============================================================
-
-if st.session_state.mode == "DEMO":
-
-    st.markdown(
-        "## 🎮 Demo Control Center"
-    )
-
-    st.caption(
-        "Change the virtual machine condition and watch "
-        "the AI response update automatically."
-    )
-
-    b1, b2, b3, b4, b5 = st.columns(5)
-
-    if b1.button(
-        "🟢 NORMAL",
-        use_container_width=True
-    ):
-        st.session_state.scenario = "NORMAL"
-
-    if b2.button(
-        "🟡 WARNING",
-        use_container_width=True
-    ):
-        st.session_state.scenario = "WARNING"
-
-    if b3.button(
-        "🔴 FAULT",
-        use_container_width=True
-    ):
-        st.session_state.scenario = "FAULT"
-
-    if b4.button(
-        "🔥 OVERHEATING",
-        use_container_width=True
-    ):
-        st.session_state.scenario = "OVERHEATING"
-
-    if b5.button(
-        "〽️ HIGH VIBRATION",
-        use_container_width=True
-    ):
-        st.session_state.scenario = "HIGH VIBRATION"
-
-    st.info(
-        f"Current Scenario: **{st.session_state.scenario}**"
-    )
-
-
-# ============================================================
-# MAIN VISUALS
-# ============================================================
-
-left, right = st.columns([2, 1])
-
-
-with left:
-
-    st.markdown(
-        "## 📈 Live Sensor Telemetry"
-    )
-
-    history_df = pd.DataFrame(
-        st.session_state.history
-    )
-
-    if not history_df.empty:
-
-        fig = go.Figure()
-
-        fig.add_trace(
-            go.Scatter(
-                x=history_df["time"],
-                y=history_df["temperature"],
-                name="Temperature °C",
-                mode="lines+markers"
-            )
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=history_df["time"],
-                y=history_df["current"],
-                name="Current A",
-                mode="lines+markers"
-            )
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=history_df["time"],
-                y=history_df["vibration"],
-                name="Vibration g",
-                mode="lines+markers"
-            )
-        )
-
-        fig.update_layout(
-            height=430,
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(3,12,28,0.7)",
-            margin=dict(
-                l=20,
-                r=20,
-                t=20,
-                b=20
-            ),
-            legend=dict(
-                orientation="h"
-            )
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-with right:
-
-    st.markdown(
-        "## 🤖 Motor Health (SVM)"
-    )
-
-    gauge = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=health,
-            title={
-                "text": status
-            },
-            gauge={
-                "axis": {
-                    "range": [0, 100]
-                },
-                "bar": {
-                    "color": "#00e676"
-                    if status == "NORMAL"
-                    else "#ffd54f"
-                    if status == "WARNING"
-                    else "#ff5252"
-                },
-                "steps": [
-                    {
-                        "range": [0, 40],
-                        "color": "#35151c"
-                    },
-                    {
-                        "range": [40, 70],
-                        "color": "#403819"
-                    },
-                    {
-                        "range": [70, 100],
-                        "color": "#123c2c"
-                    }
-                ]
-            }
-        )
-    )
-
-    gauge.update_layout(
-        height=350,
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={
-            "color": "white"
-        }
-    )
-
-    st.plotly_chart(
-        gauge,
-        use_container_width=True
-    )
-
-    st.metric(
-        "Classifier Confidence",
-        f"{confidence:.1f}%"
-    )
-
-
-# ============================================================
-# STATUS
-# ============================================================
-
-st.divider()
-
-if status == "NORMAL":
-
-    st.success(
-        "🟢 NORMAL OPERATION — All monitored parameters are within the expected demo/model range."
-    )
-
-elif status == "WARNING":
-
-    st.warning(
-        "🟡 WARNING — Abnormal operating behavior detected."
-    )
-
+scenario = "NORMAL"
+if not is_live:
+    scenario = st.sidebar.selectbox("🎯 DEMO SCENARIO", ["NORMAL", "WARNING", "FAULT"])
 else:
+    st.sidebar.info("Hardware Live Mode Active. Telemetry driven by ESP32.")
 
-    st.error(
-        "🔴 FAULT DETECTED — Critical operating condition identified."
-    )
+st.sidebar.write("") # Spacer
+st.sidebar.markdown("### ⚡ MOTOR CONTROL")
+st.sidebar.markdown("<span style='color:#94a3b8; font-size: 13px;'>Hardware relays and overrides.</span>", unsafe_allow_html=True)
+st.sidebar.write("") # Spacer
 
+if st.sidebar.button("🟢 MOTOR ON"):
+    send_hardware_command("ON") if is_live else add_event("Demo: Motor ON commanded", "INFO")
+    
+if st.sidebar.button("🟠 MOTOR OFF"):
+    send_hardware_command("OFF") if is_live else add_event("Demo: Motor OFF commanded", "INFO")
+    
+if st.sidebar.button("🚨 EMERGENCY STOP"):
+    send_hardware_command("STOP") if is_live else add_event("Demo: EMERGENCY STOP activated", "CRITICAL")
 
-# ============================================================
-# TELEMETRY TABLE + ALERTS
-# ============================================================
+st.sidebar.markdown("<br><hr style='border-color: rgba(56, 189, 248, 0.2);'>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>EdgeGuard v1.0<br>Predictive Maintenance Engine</div>", unsafe_allow_html=True)
 
-c1, c2 = st.columns(2)
-
-
-with c1:
-
-    st.markdown(
-        "## 📡 Live Telemetry"
-    )
-
-    if not history_df.empty:
-
-        display_df = history_df.tail(10).copy()
-
-        display_df = display_df.rename(
-            columns={
-                "time": "Time",
-                "temperature": "Temp °C",
-                "current": "Current A",
-                "vibration": "Vibration g",
-                "health": "Health",
-                "status": "Status"
-            }
-        )
-
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-
-with c2:
-
-    st.markdown(
-        "## 🚨 Recent Events"
-    )
-
-    if status == "NORMAL":
-
-        st.success(
-            "Normal operation"
-        )
-
-        st.caption(
-            "No critical abnormality detected."
-        )
-
-    elif status == "WARNING":
-
-        st.warning(
-            "Warning condition detected"
-        )
-
-        st.caption(
-            "Monitor machine parameters."
-        )
-
+# --- DATA ACQUISITION & PROCESSING ---
+if not is_live:
+    wave_data, temp_val, curr_val = generate_demo_waveform(scenario)
+    vib_rms = np.sqrt(np.mean(np.square(wave_data)))
+    motor_state = "RUNNING" if scenario != "FAULT" else "STOPPED"
+    relay_state = "ARMED" if scenario != "FAULT" else "TRIPPED"
+else:
+    telemetry = read_live_telemetry()
+    if telemetry:
+        wave_data = telemetry.get("waveform", [0]*128)
+        temp_val = telemetry.get("temperature", 0)
+        curr_val = telemetry.get("current", 0)
+        vib_rms = telemetry.get("vibration_rms", 0)
+        motor_state = "RUNNING" if telemetry.get("motor_state", 1) == 1 else "STOPPED"
+        relay_state = "ARMED" if telemetry.get("motor_state", 1) == 1 else "TRIPPED"
     else:
+        wave_data, temp_val, curr_val, vib_rms, motor_state, relay_state = [0]*128, 0, 0, 0, "UNKNOWN", "UNKNOWN"
 
-        st.error(
-            "Fault condition detected"
-        )
+# ML Prediction
+classification, confidence = ml_engine.predict(temp_val, curr_val, vib_rms)
+health_index = confidence * 100 if classification == "NORMAL_OPERATION" else (100 - (confidence * 100))
 
-        st.caption(
-            "Protective action should be considered."
-        )
+# Status Formatting
+status_color_map = {"NORMAL_OPERATION": "status-normal", "EARLY_ABNORMALITY": "status-warning", "CRITICAL_FAULT": "status-fault"}
+status_class = status_color_map.get(classification, "status-normal")
 
-    st.write("")
+# --- KPI ROW ---
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("TEMPERATURE (°C)", f"{temp_val:.1f}", "DS18B20")
+k2.metric("CURRENT (A)", f"{curr_val:.2f}", "ACS712")
+k3.metric("VIBRATION RMS (g)", f"{vib_rms:.3f}", "ADXL345")
+k4.metric("HEALTH SCORE", f"{health_index:.1f}%", "SVM Model")
+k5.metric("PREDICTIVE RUL", "1200 h" if classification=="NORMAL_OPERATION" else ("240 h" if classification=="EARLY_ABNORMALITY" else "0 h"), "Estimated")
 
-    st.markdown("### Current Scenario")
+# --- MAIN DASHBOARD AREA ---
+col_charts, col_status = st.columns([7, 3])
 
-    if st.session_state.mode == "DEMO":
+with col_charts:
+    # Waveform Plot
+    fig_wave = plotly_go.Figure()
+    fig_wave.add_trace(plotly_go.Scatter(y=wave_data, mode='lines', line=dict(color='#0ea5e9', width=2)))
+    fig_wave.update_layout(title="REAL-TIME DSP VIBRATION WAVEFORM", height=250, margin=dict(l=0, r=0, t=30, b=0),
+                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'),
+                           xaxis=dict(showgrid=True, gridcolor='#374151', title="Samples"),
+                           yaxis=dict(showgrid=True, gridcolor='#374151', title="Accel (g)"))
+    st.plotly_chart(fig_wave, use_container_width=True)
+    
+    # FFT Plot
+    freqs, magnitudes = perform_fft(wave_data, fs=200)
+    fig_fft = plotly_go.Figure()
+    fig_fft.add_trace(plotly_go.Scatter(x=freqs, y=magnitudes, mode='lines', line=dict(color='#8b5cf6', width=2), fill='tozeroy'))
+    fig_fft.update_layout(title="FFT FREQUENCY SPECTRUM", height=200, margin=dict(l=0, r=0, t=30, b=0),
+                          paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'),
+                          xaxis=dict(showgrid=True, gridcolor='#374151', title="Frequency (Hz)"),
+                          yaxis=dict(showgrid=True, gridcolor='#374151', title="Magnitude"))
+    st.plotly_chart(fig_fft, use_container_width=True)
 
-        st.write(
-            f"🎮 {st.session_state.scenario}"
-        )
+with col_status:
+    # Confidence Gauge
+    st.markdown("### AI FAULT CLASSIFICATION")
+    st.markdown(f"<div style='text-align:center; padding: 10px;'><span class='{status_class}' style='font-size:18px;'>{classification}</span></div>", unsafe_allow_html=True)
+    
+    fig_gauge = plotly_go.Figure(plotly_go.Indicator(
+        mode = "gauge+number",
+        value = confidence * 100,
+        number = {'suffix': "%", 'font': {'color': '#f8fafc'}},
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        gauge = {
+            'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "#374151"},
+            'bar': {'color': "#10b981" if classification=="NORMAL_OPERATION" else ("#f59e0b" if classification=="EARLY_ABNORMALITY" else "#ef4444")},
+            'bgcolor': "#1f2937",
+            'borderwidth': 0,
+            'steps': [
+                {'range': [0, 50], 'color': 'rgba(239, 68, 68, 0.2)'},
+                {'range': [50, 85], 'color': 'rgba(245, 158, 11, 0.2)'},
+                {'range': [85, 100], 'color': 'rgba(16, 185, 129, 0.2)'}],
+        }))
+    fig_gauge.update_layout(height=200, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'))
+    st.plotly_chart(fig_gauge, use_container_width=True)
+    
+    # Protection Status
+    st.markdown("### ⚡ PROTECTION INTERLOCK")
+    relay_color = "#10b981" if relay_state == "ARMED" else "#ef4444"
+    motor_color = "#10b981" if motor_state == "RUNNING" else "#ef4444"
+    st.markdown(f"""
+    <div style='background-color:#1f2937; padding:15px; border-radius:8px; border:1px solid #374151;'>
+        <p style='margin:0; font-size:14px; color:#94a3b8;'>RELAY STATUS</p>
+        <p style='margin:0 0 10px 0; font-size:20px; font-weight:bold; color:{relay_color};'>{relay_state}</p>
+        <p style='margin:0; font-size:14px; color:#94a3b8;'>MOTOR POWER</p>
+        <p style='margin:0; font-size:20px; font-weight:bold; color:{motor_color};'>{motor_state}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    else:
+# --- RECENT EVENTS ---
+st.markdown("### 📋 RECENT EVENTS & ALERTS")
+if classification != "NORMAL_OPERATION" and (len(st.session_state.events) == 0 or st.session_state.events[0]["Event"] != classification):
+    add_event(f"AI Classification change: {classification}", "WARNING" if classification=="EARLY_ABNORMALITY" else "CRITICAL")
 
-        st.write(
-            "📡 ESP32 Hardware Telemetry"
-        )
+if st.session_state.events:
+    df_events = pd.DataFrame(st.session_state.events)
+    st.dataframe(df_events, use_container_width=True, hide_index=True)
+else:
+    st.info("No recent events logged.")
 
-
-# ============================================================
-# SYSTEM INFORMATION
-# ============================================================
-
-st.divider()
-
-st.markdown(
-    "## ⚙️ System Information"
-)
-
-s1, s2, s3, s4 = st.columns(4)
-
-with s1:
-    st.write("**Data Source**")
-    st.write(
-        "Simulation"
-        if st.session_state.mode == "DEMO"
-        else "ESP32 Hardware"
-    )
-
-with s2:
-    st.write("**AI Model**")
-    st.write("SVM / RBF")
-
-with s3:
-    st.write("**Motor State**")
-    st.write(
-        "RUNNING"
-        if data.get("motor_state", 1)
-        else "STOPPED"
-    )
-
-with s4:
-    st.write("**Last Update**")
-    st.write(
-        datetime.now().strftime("%H:%M:%S")
-    )
-
-
-st.caption(
-    "EdgeGuard • Predict Today • Prevent Tomorrow"
-)
+# Auto-refresh mechanism
+time.sleep(1.0)
+st.rerun()
