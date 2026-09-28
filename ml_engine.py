@@ -20,9 +20,6 @@ class EdgeGuardMLEngine:
             print("Warning: ML models not found. Run train_model.py first. Using heuristic fallback.")
 
     def predict(self, temp, current, vib_rms):
-        """
-        Returns (Classification String, Confidence Float)
-        """
         if self.model and self.scaler:
             try:
                 features = extract_features(temp, current, vib_rms)
@@ -36,9 +33,8 @@ class EdgeGuardMLEngine:
                 
                 return class_label, confidence
             except Exception as e:
-                print(f"ML Prediction error: {e}")
+                pass
                 
-        # Fallback Heuristics if model is missing
         return self._heuristic_fallback(temp, current, vib_rms)
 
     def _heuristic_fallback(self, temp, current, vib_rms):

@@ -29,7 +29,7 @@ void setup() {
   Serial.begin(115200);
   
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW); // Relay ON (Active Low/High depends on module. Assume HIGH=OFF, LOW=ON for safety)
+  digitalWrite(RELAY_PIN, LOW); // Relay ON (Active Low module)
   motorRunning = true;
 
   tempSensor.begin();
@@ -41,13 +41,13 @@ void setup() {
 }
 
 void loop() {
-  // 1. Handle incoming serial commands from dashboard (bridge.py)
+  // 1. Handle incoming serial commands
   if (Serial.available() > 0) {
     char cmd = Serial.read();
     if (cmd == '1') {
       digitalWrite(RELAY_PIN, LOW);
       motorRunning = true;
-      faultCounter = 0; // Reset protection
+      faultCounter = 0;
     } else if (cmd == '0') {
       digitalWrite(RELAY_PIN, HIGH);
       motorRunning = false;
@@ -58,8 +58,7 @@ void loop() {
   tempSensor.requestTemperatures();
   float temperature = tempSensor.getTempCByIndex(0);
 
-  // 3. Read Current (Assuming 5V -> voltage divider -> 3.3V ADC)
-  // Basic calibration: adjust offset/sensitivity as needed for your specific ACS712
+  // 3. Read Current (Assuming 5V -> 1.8k/3.3k voltage divider -> 3.3V ADC)
   long adc_sum = 0;
   for(int i=0; i<20; i++){
     adc_sum += analogRead(ACS712_PIN);
@@ -67,23 +66,22 @@ void loop() {
   }
   float avg_adc = adc_sum / 20.0;
   float voltage = (avg_adc / 4095.0) * 3.3;
+  
   // Scaled calculation for 20A module through voltage divider
   float current = abs((voltage - 1.61) / 0.066); 
   if(current < 0.05) current = 0.0;
 
-  // 4. Capture Vibration Waveform (High speed burst)
+  // 4. Capture Vibration Waveform
   float waveform[SAMPLES_PER_PACKET];
   float sum_sq = 0;
   
   for(int i = 0; i < SAMPLES_PER_PACKET; i++) {
     sensors_event_t event;
     accel.getEvent(&event);
-    
-    // Combine axes or just use Z axis. Here we use a combined magnitude proxy
-    float mag = sqrt(pow(event.acceleration.x, 2) + pow(event.acceleration.y, 2) + pow(event.acceleration.z, 2)) / 9.81; // Convert m/s^2 to g
+    float mag = sqrt(pow(event.acceleration.x, 2) + pow(event.acceleration.y, 2) + pow(event.acceleration.z, 2)) / 9.81;
     waveform[i] = mag;
     sum_sq += pow(mag, 2);
-    delay(5); // Roughly 200Hz sampling rate for this burst
+    delay(5); 
   }
   
   float vib_rms = sqrt(sum_sq / SAMPLES_PER_PACKET);
@@ -91,7 +89,7 @@ void loop() {
   // 5. Local Hardware Protection Interlock
   if (temperature >= FAULT_TEMP || current >= FAULT_CURRENT || vib_rms >= FAULT_VIB_RMS) {
     faultCounter++;
-    if (faultCounter >= 3) { // Require 3 consecutive bad readings to trip (debouncing)
+    if (faultCounter >= 3) {
       digitalWrite(RELAY_PIN, HIGH); // Trip Relay
       motorRunning = false;
     }

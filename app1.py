@@ -33,7 +33,6 @@ st.markdown("""
         box-shadow: 5px 0 20px rgba(56, 189, 248, 0.15);
     }
     
-    /* Sidebar Headers */
     [data-testid="stSidebar"] h3 {
         color: #38bdf8 !important;
         font-weight: 800 !important;
@@ -45,7 +44,6 @@ st.markdown("""
         text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
     }
 
-    /* Sidebar Radio & Selectbox glowing borders */
     [data-testid="stSidebar"] .stSelectbox > div > div {
         background-color: rgba(30, 41, 59, 0.7);
         border: 1px solid #8b5cf6;
@@ -53,7 +51,6 @@ st.markdown("""
         box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
     }
     
-    /* Sidebar Button Styling */
     [data-testid="stSidebar"] .stButton > button {
         width: 100%;
         font-weight: bold;
@@ -63,26 +60,14 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     
-    /* Hover effects for buttons (Color coded by position) */
     [data-testid="stSidebar"] .element-container:nth-of-type(4) button:hover {
-        background-color: rgba(16, 185, 129, 0.2);
-        border-color: #10b981;
-        color: #10b981;
-        box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        background-color: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
     }
-    
     [data-testid="stSidebar"] .element-container:nth-of-type(5) button:hover {
-        background-color: rgba(245, 158, 11, 0.2);
-        border-color: #f59e0b;
-        color: #f59e0b;
-        box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+        background-color: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
     }
-    
     [data-testid="stSidebar"] .element-container:nth-of-type(6) button:hover {
-        background-color: rgba(239, 68, 68, 0.2);
-        border-color: #ef4444;
-        color: #ef4444;
-        box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+        background-color: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
     }
     
     /* --- MAIN DASHBOARD CARDS --- */
@@ -94,26 +79,13 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
-    /* Metrics */
-    [data-testid="stMetricValue"] {
-        font-size: 28px !important;
-        font-weight: 700 !important;
-        color: #f8fafc !important;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #94a3b8 !important;
-        font-size: 14px !important;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    
+    [data-testid="stMetricValue"] { font-size: 28px !important; font-weight: 700 !important; color: #f8fafc !important; }
+    [data-testid="stMetricLabel"] { color: #94a3b8 !important; font-size: 14px !important; text-transform: uppercase; letter-spacing: 0.05em; }
     h1, h2 { color: #f1f5f9 !important; font-weight: 600 !important; }
     
-    /* Status Badges */
     .status-normal { background-color: rgba(16, 185, 129, 0.2); color: #10b981; padding: 4px 12px; border-radius: 12px; font-weight: bold; border: 1px solid #10b981; }
     .status-warning { background-color: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 4px 12px; border-radius: 12px; font-weight: bold; border: 1px solid #f59e0b; }
     .status-fault { background-color: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 4px 12px; border-radius: 12px; font-weight: bold; border: 1px solid #ef4444; }
-    
     hr { border-color: #374151; }
 </style>
 """, unsafe_allow_html=True)
@@ -121,8 +93,6 @@ st.markdown("""
 # State Management
 if 'events' not in st.session_state:
     st.session_state.events = []
-if 'history' not in st.session_state:
-    st.session_state.history = pd.DataFrame(columns=['Time', 'Temp', 'Current', 'Vibration', 'Status'])
 
 def add_event(message, level):
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -145,9 +115,8 @@ def generate_demo_waveform(scenario, samples=128):
     elif scenario == "WARNING":
         wave = 0.4 * np.sin(2 * np.pi * 15 * t) + 0.2 * np.sin(2 * np.pi * 45 * t) + np.random.normal(0, 0.1, samples)
         return wave.tolist(), 64.0 + np.random.normal(0, 1.5), 1.85 + np.random.normal(0, 0.1)
-    else: # FAULT
+    else: 
         wave = 1.0 * np.sin(2 * np.pi * 15 * t) + 0.8 * np.sin(2 * np.pi * 85 * t) + np.random.normal(0, 0.3, samples)
-        # Add random spikes
         spike_indices = np.random.choice(samples, 5)
         wave[spike_indices] += np.random.uniform(1.5, 2.5, 5)
         return wave.tolist(), 91.0 + np.random.normal(0, 2.0), 3.10 + np.random.normal(0, 0.2)
@@ -183,7 +152,7 @@ st.markdown("<hr style='margin-top:0px; margin-bottom: 15px;'>", unsafe_allow_ht
 # --- SIDEBAR CONTROLS ---
 st.sidebar.markdown("### 🎛️ OPERATOR CONTROL")
 st.sidebar.markdown("<span style='color:#94a3b8; font-size: 13px;'>Select telemetry origin and simulation scenario.</span>", unsafe_allow_html=True)
-st.sidebar.write("") # Spacer
+st.sidebar.write("")
 
 scenario = "NORMAL"
 if not is_live:
@@ -191,17 +160,15 @@ if not is_live:
 else:
     st.sidebar.info("Hardware Live Mode Active. Telemetry driven by ESP32.")
 
-st.sidebar.write("") # Spacer
+st.sidebar.write("")
 st.sidebar.markdown("### ⚡ MOTOR CONTROL")
 st.sidebar.markdown("<span style='color:#94a3b8; font-size: 13px;'>Hardware relays and overrides.</span>", unsafe_allow_html=True)
-st.sidebar.write("") # Spacer
+st.sidebar.write("")
 
 if st.sidebar.button("🟢 MOTOR ON"):
     send_hardware_command("ON") if is_live else add_event("Demo: Motor ON commanded", "INFO")
-    
 if st.sidebar.button("🟠 MOTOR OFF"):
     send_hardware_command("OFF") if is_live else add_event("Demo: Motor OFF commanded", "INFO")
-    
 if st.sidebar.button("🚨 EMERGENCY STOP"):
     send_hardware_command("STOP") if is_live else add_event("Demo: EMERGENCY STOP activated", "CRITICAL")
 
