@@ -1,29 +1,16 @@
-from pathlib import Path
+# System Configuration
 
-BASE_DIR = Path(__file__).resolve().parent
+# Serial Port Configuration (Update this based on your OS)
+# Windows: "COM3", "COM4", etc.
+# Linux/Raspberry Pi: "/dev/ttyUSB0" or "/dev/ttyACM0"
+SERIAL_PORT = "COM3"
+BAUD_RATE = 115200
 
-DATA_DIR = BASE_DIR / "data"
-MODEL_DIR = BASE_DIR / "models"
+# EdgeGuard Local Hardware Protection Thresholds
+# These must match the logic programmed into the ESP32
+LOCAL_PROTECTION_TEMP_MAX = 75.0     # Degrees C
+LOCAL_PROTECTION_CURRENT_MAX = 2.5   # Amperes
+LOCAL_PROTECTION_VIB_MAX = 0.75      # g (RMS)
 
-TELEMETRY_FILE = DATA_DIR / "telemetry.jsonl"
-MODEL_FILE = MODEL_DIR / "edgeguard_svm.pkl"
-
-DATA_DIR.mkdir(exist_ok=True)
-MODEL_DIR.mkdir(exist_ok=True)
-
-FEATURES = [
-    "temperature",
-    "current",
-    "vibration_rms"
-]
-
-DEFAULT_SERIAL_BAUD = 115200
-
-NORMAL_TEMP_MAX = 55.0
-WARNING_TEMP_MAX = 75.0
-
-NORMAL_CURRENT_MAX = 1.5
-WARNING_CURRENT_MAX = 2.5
-
-NORMAL_VIBRATION_MAX = 0.35
-WARNING_VIBRATION_MAX = 0.75
+# Dashboard Configuration
+DASHBOARD_REFRESH_RATE = 1.0 # Seconds

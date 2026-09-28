@@ -1,8 +1,7 @@
-streamlit
-streamlit-autorefresh
+streamlit>=1.37.0
 pandas
 numpy
+plotly
 scikit-learn
 joblib
-plotly
 pyserial
