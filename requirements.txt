@@ -1,0 +1,8 @@
+streamlit
+streamlit-autorefresh
+pandas
+numpy
+scikit-learn
+joblib
+plotly
+pyserial
